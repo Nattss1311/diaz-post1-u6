@@ -1,10 +1,17 @@
-# Diagnóstico y Refactorización de Antipatrones de Diseño — Parte 1
+# Post-contenido — Unidad 6: Antipatrones de Diseño
 
-## Análisis `GestorPedidos.java`
+## Descripción
+Repositorio del post-contenido de la Unidad 6 de Patrones de Diseño de Software — Sexto Semestre. Un único proyecto Spring Boot (`pedidos-service/`) con dos partes: diagnóstico y refactorización de un antipatrón combinado en `GestorPedidos`, y diagnóstico y corrección de un segundo antipatrón introducido al hacer crecer el mismo proyecto con tres campañas de descuento.
+
+---
+
+## Análisis y Decisiones de Diseño — Parte 1
+
+### Análisis `GestorPedidos.java`
 
 El análisis estático del archivo `GestorPedidos.java` revela múltiples violaciones a los principios fundamentales de diseño orientado a objetos (SOLID) y la presencia de antipatrones reconocidos.
 
-### 1. ¿Cuántas razones distintas tiene esta clase para cambiar? (Violación del Principio de Responsabilidad Única - SRP)
+#### 1. ¿Cuántas razones distintas tiene esta clase para cambiar? (Violación del Principio de Responsabilidad Única - SRP)
 
 La clase `GestorPedidos` actúa como un **God Object (Objeto Todopoderoso)**, agrupando 6 responsabilidades independientes dentro de la misma clase y ejecución secuencial:
 
@@ -18,7 +25,7 @@ La clase `GestorPedidos` actúa como un **God Object (Objeto Todopoderoso)**, ag
 **Efecto de la acumulación:**  
 Un cambio en el porcentaje de impuesto (línea 92), una modificación en el esquema SQL (líneas 96–111) o un ajuste en la plantilla del correo (líneas 115–122) obligan a modificar exactamente el mismo archivo, aumentando exponencialmente la probabilidad de generar efectos secundarios (*side effects*) y regresiones.
 
-### 2. ¿Cuántos niveles de anidamiento condicional alcanza el cálculo de descuento y la validación de mora? (Spaghetti Code)
+#### 2. ¿Cuántos niveles de anidamiento condicional alcanza el cálculo de descuento y la validación de mora? (Spaghetti Code)
 
 La estructura condicional del método muestra una alta complejidad ciclomática con bifurcaciones profundamente anidadas:
 
@@ -31,7 +38,7 @@ La estructura condicional del método muestra una alta complejidad ciclomática 
   * **Nivel 2:** Verificación de saldo de deuda (`if (deudaPendiente != null && deudaPendiente > 0)`).
   * **Nivel 3:** Regla de horario límite (`if (ahora.isBefore(LocalTime.of(20, 0)))`).
 
-### 3. ¿En cuántos niveles de abstracción distintos opera el método al mismo tiempo? (Violación del principio SLAP)
+#### 3. ¿En cuántos niveles de abstracción distintos opera el método al mismo tiempo? (Violación del principio SLAP)
 
 El método `procesarPedido` viola el Principio de Un Solo Nivel de Abstracción (SLAP), ya que entremezcla operaciones de muy bajo nivel técnico con decisiones de negocio de alto nivel en una única secuencia lineal:
 
@@ -44,7 +51,7 @@ El método `procesarPedido` viola el Principio de Un Solo Nivel de Abstracción 
   * Política de exención de mora por horario nocturno (después de las 20:00).
   * Lógica comercial para la jerarquía de descuentos VIP y Frecuente.
 
-### 4. Impacto de Extensibilidad: ¿Qué ocurre al agregar un nuevo tipo de cliente? (Violación del Principio Abierto/Cerrado - OCP)
+#### 4. Impacto de Extensibilidad: ¿Qué ocurre al agregar un nuevo tipo de cliente? (Violación del Principio Abierto/Cerrado - OCP)
 
 Si el negocio requiere incorporar una nueva categoría de cliente (por ejemplo, `CORPORATIVO` con un 12% de descuento fijo o un nuevo umbral):
 
@@ -52,11 +59,7 @@ Si el negocio requiere incorporar una nueva categoría de cliente (por ejemplo, 
 * **Riesgo de Regresión:** Como las variables de subtotal, descuento, impuesto y total son compartidas en la misma secuencia de código (líneas 66–93), alterar las sentencias `if/else` existentes implica re-evaluar e inspeccionar todas las rutas condicionales de clientes VIP y FRECUENTE.
 * **Ausencia de Polimorfismo:** No es posible extender el comportamiento añadiendo una nueva clase sin tocar el código fuente existente, lo cual evidencia una arquitectura rígida.
 
----
-
-## Paso 4: Refactorización y Aplicación de Patrones de Diseño
-
-### Decisiones de diseño
+### Refactorización y Aplicación de Patrones — Parte 1
 
 #### Validación de Pedidos: Chain of Responsibility (Cadena de Responsabilidad)
 * **Patrón Elegido:** `Chain of Responsibility`.
@@ -70,7 +73,7 @@ Si el negocio requiere incorporar una nueva categoría de cliente (por ejemplo, 
 
 ---
 
-## Parte 2: Diagnóstico del Segundo Antipatrón — Golden Hammer
+## Análisis y Decisiones de Diseño — Parte 2: Antipatrón Golden Hammer
 
 Al incorporar las tres nuevas campañas promocionales (`BLACK_FRIDAY`, `CORPORATIVO` y `VOLUMEN`), se incurrió en el antipatrón **Golden Hammer (Martillo de Oro)**.
 
@@ -92,14 +95,23 @@ El antipatrón ocurre cuando se fuerza el uso de un patrón o herramienta famili
 
 ### 3. Decisión de Diseño y Refactorización (Solución)
 
-* **Patrón Aplicado:** **Strategy (Estrategia)** integrado o combinado con el esquema existente.
-* **Justificación:**  
-  Las promociones y campañas son políticas de cálculo de descuento, no validaciones de integridad del pedido. Deben tratarse como estrategias de descuento independientes (o mediante una composición de estrategias de tipo `Promocional`) manejadas por la capa de cálculo/estrategias (`Strategy`), manteniendo `ValidadorPedido` enfocado exclusivamente en la responsabilidad de aceptar o rechazar solicitudes.
-
-  ### Decisiones de Diseño — Paso 7
-
 #### Strategy en vez de más eslabones de cadena
 Se corrigió modelando las tres campañas promocionales como implementaciones de `EstrategiaDescuento` y no como validadores dentro de la cadena existente. Al igual que `DescuentoVip` y `DescuentoFrecuente`, estas campañas calculan un porcentaje sin depender de un orden de evaluación estricto ni requerir un mecanismo para "cortar" el flujo de procesamiento del pedido (propiedad exclusiva de `ValidadorStock` y `ValidadorCliente`). La alternativa de mantenerlas en la cadena fue descartada por ser el origen directo del antipatrón **Golden Hammer**.
 
 #### Eliminar, no comentar, el código descartado
-Se eliminó cualquier clase o atributo temporal en lugar de conservarlos comentados como referencia histórica. Comentar código "por si se necesita después" es el mecanismo por el cual nace el antipatrón **Lava Flow**, generando confusión sobre si las líneas cumplen alguna función activa. El historial de commits de Git es el mecanismo correcto para mantener la trazabilidad del código previo.
+Se eliminó cualquier clase o atributo temporal (`PromocionBlackFriday`, `PromocionCorporativo`, `PromocionVolumen` y el campo `descuentoCampana`) en lugar de conservarlos comentados como referencia histórica. Comentar código "por si se necesita después" es el mecanismo por el cual nace el antipatrón **Lava Flow**, generando confusión sobre si las líneas cumplen alguna función activa. El historial de commits de Git es el mecanismo correcto para mantener la trazabilidad del código previo.
+
+---
+
+## Cómo ejecutar
+
+```bash
+$mvn spring-boot:run$ mvn test
+```
+## Herramientas utilizadas
+Java 17, Spring Boot, Spring JDBC, Maven, H2 Database
+
+VS Code / IntelliJ IDEA, Git, GitHub
+
+## Conclusiones
+El análisis y refactorización de esta arquitectura permitió evidenciar cómo los antipatrones God Object y Golden Hammer degradan la mantenibilidad y cohesión del software. Comprender la naturaleza del problema fue clave para seleccionar el patrón correcto: Chain of Responsibility demostró ser ideal para flujos de validación secuenciales con corte anticipado, mientras que Strategy resultó óptimo para reglas de cálculo independientes y extensibles. Finalmente, eliminar por completo el código obsoleto en lugar de comentarlo previno la aparición del antipatrón Lava Flow, garantizando un código limpio, desacoplado y listo para evolucionar.

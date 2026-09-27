@@ -67,3 +67,31 @@ Si el negocio requiere incorporar una nueva categoría de cliente (por ejemplo, 
 * **Patrón Elegido:** `Strategy` encapsulado con `SelectorEstrategiaDescuento`.
 * **Alternativa Considerada:** Agregar el cálculo de descuento como un eslabón adicional en la Chain of Responsibility.
 * **Justificación:** A diferencia de las validaciones, los descuentos no dependen de una secuencia ni de la posibilidad de cortar el flujo; siempre se aplica exactamente una regla determinada por la categoría del cliente. Modelarlo como parte de la cadena habría introducido mecanismos artificiales para evitar que múltiples eslabones modifiquen el descuento. `Strategy` junto con un mapa de selección directa (`SelectorEstrategiaDescuento`) resuelve el problema con menor indirección, eliminando por completo los `if/else` anidados sin acoplar las estrategias entre sí.
+
+---
+
+## Parte 2: Diagnóstico del Segundo Antipatrón — Golden Hammer
+
+Al incorporar las tres nuevas campañas promocionales (`BLACK_FRIDAY`, `CORPORATIVO` y `VOLUMEN`), se incurrió en el antipatrón **Golden Hammer (Martillo de Oro)**.
+
+### 1. Diagnóstico del Antipatrón (Golden Hammer)
+
+**Definición y causa:**  
+El antipatrón ocurre cuando se fuerza el uso de un patrón o herramienta familiar (`Chain of Responsibility`) para resolver un problema de naturaleza completamente diferente (aplicación de promociones/descuentos), simplemente porque "ya existía en el proyecto y funcionó en la etapa anterior", sin evaluar si era la solución conceptual y técnicamente adecuada.
+
+### 2. Evidencia en el Código
+
+* **Violación del contrato de abstracción:**  
+  Las clases `PromocionBlackFriday`, `PromocionCorporativo` y `PromocionVolumen` heredan de `ValidadorPedido`. Sin embargo, ninguna de estas clases evalúa o interrumpe el flujo; nunca ejecutan un rechazo de pedido. Su único propósito es escribir un valor mutable en `contexto.aplicarDescuentoCampana(...)`.
+* **Ausencia de necesidad de orden o corte anticipado (*short-circuit*):**  
+  A diferencia de `ValidadorStock` y `ValidadorCliente` (donde si el stock es insuficiente no tiene sentido validar al cliente), las promociones son independientes entre sí. Ejecutar `PromocionVolumen` antes que `PromocionCorporativo` no altera en absoluto el resultado final.
+* **Mutabilidad artificial del contexto:**  
+  Se alteró la clase `ContextoPedido` agregando el campo `descuentoCampana` y la lógica `if (valor > this.descuentoCampana)`, convirtiendo la cadena de validación en una tubería de mutación de estado con acoplamiento implícito.
+* **Incompatibilidad con nuevas reglas de combinación:**  
+  Si el negocio decide cambiar la regla de "el mayor descuento gana" por "sumar los descuentos acumulables", la estructura basada en cadena exige reescribir la lógica mutable del contexto o agregar hacks en los eslabones, generando ambigüedad sobre qué eslabón tiene prioridad o cuál debe ejecutarse primero.
+
+### 3. Decisión de Diseño y Refactorización (Solución)
+
+* **Patrón Aplicado:** **Strategy (Estrategia)** integrado o combinado con el esquema existente.
+* **Justificación:**  
+  Las promociones y campañas son políticas de cálculo de descuento, no validaciones de integridad del pedido. Deben tratarse como estrategias de descuento independientes (o mediante una composición de estrategias de tipo `Promocional`) manejadas por la capa de cálculo/estrategias (`Strategy`), manteniendo `ValidadorPedido` enfocado exclusivamente en la responsabilidad de aceptar o rechazar solicitudes.

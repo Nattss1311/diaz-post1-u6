@@ -95,3 +95,11 @@ El antipatrón ocurre cuando se fuerza el uso de un patrón o herramienta famili
 * **Patrón Aplicado:** **Strategy (Estrategia)** integrado o combinado con el esquema existente.
 * **Justificación:**  
   Las promociones y campañas son políticas de cálculo de descuento, no validaciones de integridad del pedido. Deben tratarse como estrategias de descuento independientes (o mediante una composición de estrategias de tipo `Promocional`) manejadas por la capa de cálculo/estrategias (`Strategy`), manteniendo `ValidadorPedido` enfocado exclusivamente en la responsabilidad de aceptar o rechazar solicitudes.
+
+  ### Decisiones de Diseño — Paso 7
+
+#### Strategy en vez de más eslabones de cadena
+Se corrigió modelando las tres campañas promocionales como implementaciones de `EstrategiaDescuento` y no como validadores dentro de la cadena existente. Al igual que `DescuentoVip` y `DescuentoFrecuente`, estas campañas calculan un porcentaje sin depender de un orden de evaluación estricto ni requerir un mecanismo para "cortar" el flujo de procesamiento del pedido (propiedad exclusiva de `ValidadorStock` y `ValidadorCliente`). La alternativa de mantenerlas en la cadena fue descartada por ser el origen directo del antipatrón **Golden Hammer**.
+
+#### Eliminar, no comentar, el código descartado
+Se eliminó cualquier clase o atributo temporal en lugar de conservarlos comentados como referencia histórica. Comentar código "por si se necesita después" es el mecanismo por el cual nace el antipatrón **Lava Flow**, generando confusión sobre si las líneas cumplen alguna función activa. El historial de commits de Git es el mecanismo correcto para mantener la trazabilidad del código previo.
